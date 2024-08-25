@@ -60,25 +60,47 @@ void JASystem::TBasicWaveBank::setWaveTableSize(u32 param_1) {
 
 /* 80285CB0-80285D54       .text incWaveTable__Q28JASystem14TBasicWaveBankFPCQ38JASystem14TBasicWaveBank10TWaveGroup */
 void JASystem::TBasicWaveBank::incWaveTable(const TWaveGroup* param_1) {
-    /* Nonmatching */
     OSLockMutex(&mMutex);
     for (int i = 0; i < param_1->mWaveCount; i++) {
-        u32 waveID = param_1->getWaveID(i);
-        TWaveInfo** table = mWaveTable;
+        TWaveInfo** table = &mWaveTable[param_1->getWaveID(i)];
         TWaveInfo* waveInfo = &param_1->mCtrlWaveArray[i];
         waveInfo->mNext = NULL;
-        waveInfo->mPrev = table[waveID];
-        if (table[waveID]) {
-            table[waveID]->mNext = waveInfo;
+        waveInfo->mPrev = *table;
+        if (*table != NULL) {
+            (*table)->mNext = waveInfo;
         }
-        table[waveID] = waveInfo;
+        *table = waveInfo;
     }
     OSUnlockMutex(&mMutex);
 }
 
 /* 80285D54-80285E28       .text decWaveTable__Q28JASystem14TBasicWaveBankFPCQ38JASystem14TBasicWaveBank10TWaveGroup */
-void JASystem::TBasicWaveBank::decWaveTable(const TWaveGroup*) {
+void JASystem::TBasicWaveBank::decWaveTable(const TWaveGroup* param_1) {
     /* Nonmatching */
+    OSLockMutex(&mMutex);
+    for (int i = 0; i < param_1->mWaveCount; i++) {
+        u32 id = param_1->getWaveID(i);
+        TWaveInfo* info = mWaveTable[id];
+        TWaveInfo* waveInfo = &param_1->mCtrlWaveArray[i];
+        for (;info; info = info->mPrev) {
+            if (info != waveInfo) {
+                continue;
+            }
+
+            if (info->mNext == NULL) {
+                mWaveTable[id] = info->mPrev;
+            } else {
+                info->mNext->mPrev = info->mPrev;
+            }
+
+            if (info->mPrev != NULL) {
+                info->mPrev->mNext = info->mNext;
+            }
+
+            break;
+        }
+    }
+    OSUnlockMutex(&mMutex);
 }
 
 /* 80285E28-80285E58       .text getWaveHandle__Q28JASystem14TBasicWaveBankCFUl */
